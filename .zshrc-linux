@@ -101,4 +101,37 @@ export NVM_DIR="~/.nvm"
 export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python
 export VIRTUALENVWRAPPER_VIRTUALENV=/usr/local/bin/virtualenv
 
+export DISABLE_MAGIC_FUNCTIONS=true
+
+alias java11='source ~/.java11.sh'
+alias java17='source ~/.java17.sh'
+
+bold() {
+    echo -e "\e[1m$1\e[0m"
+}
+
+money() {
+    # replace this with actual hourly rate
+    hourly=10
+    formatted=$(printf "%.2f\n" $(echo "scale=2; $1 * $hourly" | bc))
+    echo -e "$(bold $hours) hours, $(bold $formatted) Eurozzis"
+}
+
+mcal() {
+    gcalcli add --calendar=freelancing --when=$(date "+%Y-%m-%d") --allday --duration=1 --title="M - $1" --noprompt
+}
+
+mcurrent() {
+    from=$(date -d "$(date +%Y-%m-01)" "+%Y-%m-%d")
+    hours=$(gcalcli --calendar=freelancing search Z $from | awk '/M -/ {sum += $NF} END {print sum}')
+    money $hours
+}
+
+mpast() {
+    from=$(date -d "$(date +%Y-%m-01) -1 month" "+%Y-%m-%d")
+    to=$(date -d "$(date +%Y-%m-01) -1 day" "+%Y-%m-%d")
+    hours=$(gcalcli --calendar=freelancing search Z $from $to | awk '/M -/ {sum += $NF} END {print sum}')
+    money $hours
+}
+
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh

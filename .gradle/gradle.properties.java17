@@ -1,0 +1,4 @@
+org.gradle.jvmargs=-Xms4g -Xmx8g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=2048m
+org.gradle.java.home=/usr/lib/jvm/java-17-openjdk-amd64
+javacPath=/usr/lib/jvm/java-17-openjdk-amd64/bin/javac
+
