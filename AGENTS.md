@@ -30,13 +30,22 @@ No restart needed. Claude watches the settings file and reloads hooks and `prefe
 
 ### .tmux.conf
 
-No existing file: copy mine. Existing file: add three things and don't touch their prefix, bindings, or theme:
+No existing file: copy mine. Existing file: add these and don't touch their prefix, bindings, or theme:
 
 - `set -g monitor-bell on`
+- `set -g focus-events on`
 - the `pane-border-status` and `pane-border-format` lines
 - `run-shell -b 'sleep 1; ~/.tmux/claude-attention-marker.sh'`, placed *after* the `run '~/.tmux/plugins/tpm/tpm'` line
+- `set -gw window-status-bell-style default`, also *after* tpm
+- `set-hook -g pane-focus-in 'set -pu @claude_attention'` and `set-hook -g pane-focus-out 'set -pu @claude_attention'`
 
-Order matters for that last one. The theme sets `window-status-format` while tpm loads it, so the helper has to run afterward or it injects into the wrong (or empty) format. The `-b` and `sleep 1` are a deliberate hack: they background the helper and give tpm a moment to finish, because plugin loading isn't strictly synchronous.
+Order matters for the `run-shell` line. The theme sets `window-status-format` while tpm loads it, so the helper has to run afterward or it injects into the wrong (or empty) format. The `-b` and `sleep 1` are a deliberate hack: they background the helper and give tpm a moment to finish, because plugin loading isn't strictly synchronous.
+
+**`focus-events on` is not optional, and the failure is silent.** Claude only rings the bell when it believes its terminal is unfocused (so it doesn't beep at you while you're watching it). Inside tmux, Claude learns it lost focus only from the focus-out escape sequence tmux sends — and tmux sends it *only* when `focus-events` is on. With it off, Claude thinks it's always focused, never rings the bell, and you get no sound and no tab dot even from a tab you're not looking at. The WAITING pane label still shows (it's driven by hooks, not the bell), which is exactly the misleading half-working state that hides the cause. This same setting is what makes the `pane-focus-in` hook fire.
+
+**`window-status-bell-style default` undoes a theme default.** gruvbox (and nord, and others) reverse-video a tab when its bell rings, which greys out the whole tab — ugly, and redundant once the 🔴 dot is the signal. Setting the bell style to `default` keeps the tab's normal colors; the dot alone marks it. Must come after tpm, since the theme sets the style during load.
+
+**The `pane-focus-in` / `pane-focus-out` hooks clear the WAITING marker on focus changes.** Without them the marker only clears on `UserPromptSubmit` (i.e. when you press Enter), so a pane you've glanced at but not answered keeps saying WAITING. focus-in clears it when you look at the pane; focus-out clears it when you leave (handy when Claude stops while you're already *in* its pane — otherwise that marker lingers until you hit Enter). Both clear per *pane*, not per window. The focus-out hook fires for the pane *losing* focus (verified), so `set -pu` with no `-t` targets the right one. Tradeoff: switching away from a multi-pane window clears that pane's marker immediately, so returning won't show which pane had been waiting — fine for one-Claude-per-tab. Both need `focus-events on`.
 
 **Do not hand-edit `window-status-format`.** The theme I use (gruvbox) builds the tab out of powerline separator glyphs — private-use Unicode characters. They don't survive being copied as text: they disappear, and you're left with mangled tabs and the dot on the wrong tab. That whole class of bug is why the helper exists. It reads the live format with `tmux show-options` and injects the dot with `sed`, touching only the bytes around `#W` and leaving the glyphs intact. Let the script do it; never retype the format string.
 
@@ -55,7 +64,10 @@ Then check the pieces:
 - the settings file parses (the `node -e` command above exits clean)
 - `tmux show -gwv window-status-format | grep -q '#{?window_bell_flag,🔴 ,}#W'` finds the injected marker — if not, run the helper by hand and look again
 - `tmux show -gwv pane-border-status` prints `top`
+- `tmux show -gv focus-events` prints `on`
+- `tmux show -gwv window-status-bell-style` prints `default`
+- `tmux show-hook -g pane-focus-in` prints `pane-focus-in[0] set-option -pu @claude_attention` (and `pane-focus-out` likewise)
 - `test -x ~/.tmux/claude-attention-marker.sh`
 - in a Claude session, `/hooks` lists `Notification`, `Stop`, and `UserPromptSubmit`
 
-For an end-to-end check, leave a Claude session working in a tab you're not viewing and wait for it to want input. Its tab should get the dot, and switching to it should clear it.
+For an end-to-end check, leave a Claude session working in a tab you're not viewing and wait for it to want input. Its tab should get the dot (in the tab's normal colors, not greyed out) and the terminal should beep; switching to it should clear both the dot and the pane's WAITING marker.
