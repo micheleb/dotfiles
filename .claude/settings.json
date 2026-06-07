@@ -76,6 +76,17 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$TMUX_PANE\" ] && tmux set-option -pu -t \"$TMUX_PANE\" @claude_attention || true"
+          }
+        ]
+      }
     ]
   }
 }

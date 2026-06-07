@@ -14,11 +14,26 @@ It comes in two halves.
 
 Tab dots: when a Claude session needs input (a permission prompt, or it's gone idle) it rings the terminal bell. tmux's `monitor-bell` catches that and sets the window's bell flag, and a red dot (`🔴`) appears next to that window's name in the status bar, injected just before `#W` in `window-status-format`. tmux clears a window's bell flag the moment you focus it, so the dot only ever shows on tabs you're *not* looking at. That's the point of it.
 
-Pane dots: tmux tracks the bell per window, not per pane, so the bell alone can't say which pane inside a tab is waiting. Instead, Claude hooks set a per-pane tmux variable, `@claude_attention`, and `pane-border-format` renders `🔴 WAITING` on that pane's border. `Stop` and `Notification` set it; `UserPromptSubmit` clears it.
+Pane dots: tmux tracks the bell per window, not per pane, so the bell alone can't say which pane inside a tab is waiting. Instead, Claude hooks set a per-pane tmux variable, `@claude_attention`, and `pane-border-format` renders `🔴 WAITING` on that pane's border (and `pane-border-style` turns the border red). `Stop` and `Notification` set it; `UserPromptSubmit` clears it; the `pane-focus-in/out` hooks also clear it on focus changes.
+
+**What clears the marker.** It's set by `Notification`/`Stop` and cleared by several events:
+- `UserPromptSubmit` — typing in the **main prompt and pressing Enter**;
+- `PostToolUse` (matcher `*`) — **any tool completing**. This is the important one: answering an
+  in-conversation question (`AskUserQuestion`) and approving a **permission prompt** are both tool
+  completions, so this is what clears the marker in those cases. `UserPromptSubmit` alone does
+  NOT fire for them — that's why the `PostToolUse` hook exists.
+- `pane-focus-in/out` — switching focus.
+
+The one thing that genuinely **can't** clear it: **plain typing without submitting** — tmux/Claude
+have no keystroke hook, so nothing fires until you actually submit/answer/act or change focus.
+Also: `Notification` (which *sets* the marker) fires for permission prompts and ~60s idle, but
+**not** for auto-approved tool calls — so an auto-approved command won't turn the border red.
+
+**Don't add `tmux refresh-client` to the hooks as a "redraw nudge."** Setting/unsetting a `@` option already forces a full client redraw in tmux (`options_push_changes()` → `server_redraw_client()`), so the border repaints on the hook's `set-option` alone — `refresh-client` is redundant. It also correlated with the bell/tab-dot going silent during testing (cause unconfirmed), so it's both unnecessary and risky. If a marker seems not to clear on a genuine clean submit, suspect hook firing/targeting (log `$TMUX_PANE` / `#{pane_id}` / `#{window_id}`), not tmux's ability to redraw.
 
 ### .claude/settings.json
 
-No existing file: copy mine. Existing file: merge in two things and leave the rest alone — `"preferredNotifChannel": "terminal_bell"`, and the three hooks (`Notification`, `Stop`, `UserPromptSubmit`) under `"hooks"`. If they already have hooks on those events, append to the event's array rather than replacing it.
+No existing file: copy mine. Existing file: merge in two things and leave the rest alone — `"preferredNotifChannel": "terminal_bell"`, and the four hooks (`Notification`, `Stop`, `UserPromptSubmit`, `PostToolUse`) under `"hooks"`. If they already have hooks on those events, append to the event's array rather than replacing it. (`Notification`/`Stop` *set* `@claude_attention`; `UserPromptSubmit` and `PostToolUse` with matcher `*` *clear* it — see the behavioral note below for why `PostToolUse` is needed.)
 
 **Keep the file valid JSON.** This is the trap that cost me a debugging session: one trailing comma (say, after the last entry in `permissions.allow`) makes Claude fail to load the whole file. It doesn't complain — the hooks just stop firing and the bell goes silent, so the dots vanish with no obvious cause. Validate after every edit:
 
