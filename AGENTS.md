@@ -63,7 +63,18 @@ Order matters for the `run-shell` line. The theme sets `window-status-format` wh
 
 **The `pane-focus-in` / `pane-focus-out` hooks clear the WAITING marker on focus changes.** Without them the marker only clears on `UserPromptSubmit` (i.e. when you press Enter), so a pane you've glanced at but not answered keeps saying WAITING. focus-in clears it when you look at the pane; focus-out clears it when you leave (handy when Claude stops while you're already *in* its pane — otherwise that marker lingers until you hit Enter). Both clear per *pane*, not per window. The focus-out hook fires for the pane *losing* focus (verified), so `set -pu` with no `-t` targets the right one. Tradeoff: switching away from a multi-pane window clears that pane's marker immediately, so returning won't show which pane had been waiting — fine for one-Claude-per-tab. Both need `focus-events on`.
 
-**The red border is the one theme-coupled piece.** tmux style options accept `#{...}` formats evaluated per pane, so `pane-active-border-style` / `pane-border-style` branch on `@claude_attention` to go red while WAITING. The catch is the *else* branch: setting these overrides the theme's own border colors, so the non-waiting branch has to reproduce them or panes change color when idle. The repo's values are gruvbox dark's exact borders — `fg=#d5c4a1` (col_fg2) active, `fg=#3c3836` (col_bg1) inactive; pulled from `src/palette_gruvbox_dark.sh` + `src/theme_gruvbox_dark.sh` in egel/tmux-gruvbox. On a different theme, look up that theme's border colors and use them as the else branch (or use `default` and accept a slightly different idle border). Commas inside a style (`fg=red,bold`) are escaped `#,` so they aren't read as the `#{?}` separator; the `#` in a hex color is fine. Must come after tpm.
+**The red border is the one theme-coupled piece.** tmux style options accept `#{...}` formats evaluated per pane, so `pane-active-border-style` / `pane-border-style` branch on `@claude_attention` to go red while WAITING. The catch is the *else* branch: setting these overrides the theme's own border colors, so the non-waiting branch has to reproduce them or panes change color when idle. Commas inside a style (`fg=red,bold`) are escaped `#,` so they aren't read as the `#{?}` separator; the `#` in a hex color is fine. Must come after tpm.
+
+The two themes I actually use — match the else branch to whichever one is loaded:
+
+- **gruvbox dark** (egel/tmux-gruvbox) — what the repo's tracked `.tmux.conf` ships. Active `fg=#d5c4a1` (col_fg2), inactive `fg=#3c3836` (col_bg1); pulled from `src/palette_gruvbox_dark.sh` + `src/theme_gruvbox_dark.sh`. So:
+  - `set -g pane-active-border-style '#{?@claude_attention,fg=red#,bold,fg=#d5c4a1}'`
+  - `set -g pane-border-style '#{?@claude_attention,fg=red,fg=#3c3836}'`
+- **nord** (nordtheme/tmux) — active `bg=default,fg=blue`, inactive `bg=default,fg=brightblack`; straight from `src/nord.conf`. Note the extra `bg=default` (nord sets it), and the commas inside each else branch must also be escaped `#,`:
+  - `set -g pane-active-border-style '#{?@claude_attention,fg=red#,bold,bg=default#,fg=blue}'`
+  - `set -g pane-border-style '#{?@claude_attention,fg=red,bg=default#,fg=brightblack}'`
+
+On any other theme, look up its border colors the same way and use them as the else branch (or use `default` and accept a slightly different idle border).
 
 **Do not hand-edit `window-status-format`.** The theme I use (gruvbox) builds the tab out of powerline separator glyphs — private-use Unicode characters. They don't survive being copied as text: they disappear, and you're left with mangled tabs and the dot on the wrong tab. That whole class of bug is why the helper exists. It reads the live format with `tmux show-options` and injects the dot with `sed`, touching only the bytes around `#W` and leaving the glyphs intact. Let the script do it; never retype the format string.
 
